@@ -2,8 +2,6 @@ import discord
 from discord.ext import commands
 import threading
 
-from health import start_health_server
-
 
 class DashboardBot(commands.Bot):
     async def setup_hook(self):
@@ -27,4 +25,5 @@ if __name__ == "__main__":
     ).start()
 
     bot.run(config.DISCORD_TOKEN)
+
 
