@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import threading
-
+import os
 
 class DashboardBot(commands.Bot):
     async def setup_hook(self):
@@ -16,14 +16,8 @@ bot = DashboardBot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"✅ Bot conectado como {bot.user}")
 
-
-if __name__ == "__main__":
-    # 🔍 Health check (MISMO BOT, MISMO PROCESO)
-    threading.Thread(
-        daemon=True
-    ).start()
-
-    bot.run(config.DISCORD_TOKEN)
+def run_bot():
+    bot.run(os.environ["DISCORD_TOKEN"])
 
 
 
