@@ -1,3 +1,4 @@
+import os
 import discord
 from discord.ext import commands, tasks
 import aiohttp
@@ -9,18 +10,22 @@ import re
 class MoodleCalendar(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.tz = pytz.timezone(config.TIMEZONE)
+        self.tz = pytz.timezone(os.environ.get("TIMEZONE", "UTC"))
 
         self.dashboard_id = None
         self.log_id = None
-
         self.known_tasks = {}
         self.loop.start()
+
+        # Variables desde el entorno
+        self.moodle_ics_url = os.environ.get("MOODLE_ICS_URL")
+        self.channel_id = int(os.environ.get("CHANNEL_ID", 0))
+        self.check_interval_min = int(os.environ.get("CHECK_INTERVAL_MIN", 60))
 
     # ---------- UTILIDADES ----------
     async def fetch_calendar(self):
         async with aiohttp.ClientSession() as s:
-            async with s.get(config.MOODLE_ICS_URL) as r:
+            async with s.get(self.moodle_ics_url) as r:
                 return Calendar.from_ical(await r.text())
 
     def classify(self, hours):
@@ -33,11 +38,11 @@ class MoodleCalendar(commands.Cog):
         return None
 
     # ---------- LOOP PRINCIPAL ----------
-    @tasks.loop(minutes=config.CHECK_INTERVAL_MIN)
+    @tasks.loop(minutes=lambda self: self.check_interval_min)
     async def loop(self):
         cal = await self.fetch_calendar()
         now = datetime.now(self.tz)
-        channel = self.bot.get_channel(config.CHANNEL_ID)
+        channel = self.bot.get_channel(self.channel_id)
 
         dashboard = discord.Embed(
             title="📊 Dashboard de Tareas Moodle",
@@ -147,7 +152,7 @@ class MoodleCalendar(commands.Cog):
     @loop.before_loop
     async def before(self):
         await self.bot.wait_until_ready()
-        channel = self.bot.get_channel(config.CHANNEL_ID)
+        channel = self.bot.get_channel(self.channel_id)
 
         # Borrar mensajes anteriores del bot
         async for msg in channel.history(limit=50):
@@ -164,4 +169,5 @@ class MoodleCalendar(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(MoodleCalendar(bot))
+
 
