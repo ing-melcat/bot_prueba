@@ -1,11 +1,10 @@
-import os
 import discord
 from discord.ext import commands, tasks
 import aiohttp
 from icalendar import Calendar
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
-import re
+import os
 
 class MoodleCalendar(commands.Cog):
     def __init__(self, bot):
@@ -15,17 +14,20 @@ class MoodleCalendar(commands.Cog):
         self.dashboard_id = None
         self.log_id = None
         self.known_tasks = {}
-        self.loop.start()
 
         # Variables desde el entorno
         self.moodle_ics_url = os.environ.get("MOODLE_ICS_URL")
         self.channel_id = int(os.environ.get("CHANNEL_ID", 0))
         self.check_interval_min = int(os.environ.get("CHECK_INTERVAL_MIN", 60))
 
+        # Arrancamos el loop con cualquier número, luego ajustamos el intervalo
+        self.loop.change_interval(minutes=self.check_interval_min)
+        self.loop.start()
+
     # ---------- UTILIDADES ----------
     async def fetch_calendar(self):
-        async with aiohttp.ClientSession() as s:
-            async with s.get(self.moodle_ics_url) as r:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(self.moodle_ics_url) as r:
                 return Calendar.from_ical(await r.text())
 
     def classify(self, hours):
@@ -38,7 +40,7 @@ class MoodleCalendar(commands.Cog):
         return None
 
     # ---------- LOOP PRINCIPAL ----------
-    @tasks.loop(minutes=lambda self: self.check_interval_min)
+    @tasks.loop(minutes=60)  # número inicial, se ajusta en __init__
     async def loop(self):
         cal = await self.fetch_calendar()
         now = datetime.now(self.tz)
@@ -50,12 +52,7 @@ class MoodleCalendar(commands.Cog):
             color=discord.Color.blurple()
         )
 
-        cambios = {
-            "nuevas": [],
-            "urgentes": [],
-            "vencidas": []
-        }
-
+        cambios = {"nuevas": [], "urgentes": [], "vencidas": []}
         active_tasks = {}
 
         for e in cal.walk("VEVENT"):
@@ -67,7 +64,6 @@ class MoodleCalendar(commands.Cog):
 
             due = due.astimezone(self.tz)
             hours = (due - now).total_seconds() / 3600
-
             active_tasks[title] = due
 
             # ---- VENCIDAS ----
@@ -77,14 +73,12 @@ class MoodleCalendar(commands.Cog):
                 continue
 
             estado = self.classify(hours)
-            if not estado:
-                continue
-
-            dashboard.add_field(
-                name=f"{estado} — {title}",
-                value=f"⏰ {due.strftime('%d/%m %H:%M')} | ⌛ {int(hours)}h",
-                inline=False
-            )
+            if estado:
+                dashboard.add_field(
+                    name=f"{estado} — {title}",
+                    value=f"⏰ {due.strftime('%d/%m %H:%M')} | ⌛ {int(hours)}h",
+                    inline=False
+                )
 
             # ---- NUEVAS ----
             if title not in self.known_tasks:
@@ -119,9 +113,7 @@ class MoodleCalendar(commands.Cog):
             if cambios["nuevas"]:
                 log.add_field(
                     name="🆕 Tareas agregadas",
-                    value="\n".join(
-                        f"• {t} ({h}h)" for t, h in cambios["nuevas"]
-                    ),
+                    value="\n".join(f"• {t} ({h}h)" for t, h in cambios["nuevas"]),
                     inline=False
                 )
 
@@ -139,10 +131,7 @@ class MoodleCalendar(commands.Cog):
                     inline=False
                 )
 
-            log_msg = await channel.send(
-                content="@everyone",
-                embed=log
-            )
+            log_msg = await channel.send(content="@everyone", embed=log)
             self.log_id = log_msg.id
 
         # ---------- GUARDAR ESTADO ----------
@@ -169,5 +158,4 @@ class MoodleCalendar(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(MoodleCalendar(bot))
-
 
