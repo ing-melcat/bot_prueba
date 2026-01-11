@@ -4,30 +4,27 @@ import aiohttp
 from icalendar import Calendar
 from datetime import datetime
 import pytz
+
 import os
 
 class MoodleCalendar(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.tz = pytz.timezone(os.environ.get("TIMEZONE", "UTC"))
+        self.tz = pytz.timezone(os.environ.get("TIMEZONE", "America/Mexico_City"))
+
+        self.channel_id = int(os.environ.get("CHANNEL_ID", 0))
+        self.moodle_ics_url = os.environ.get("MOODLE_ICS_URL")
+        self.check_interval_min = int(os.environ.get("CHECK_INTERVAL_MIN", 15))
 
         self.dashboard_id = None
         self.log_id = None
         self.known_tasks = {}
-
-        # Variables desde el entorno
-        self.moodle_ics_url = os.environ.get("MOODLE_ICS_URL")
-        self.channel_id = int(os.environ.get("CHANNEL_ID", 0))
-        self.check_interval_min = int(os.environ.get("CHECK_INTERVAL_MIN", 60))
-
-        # Arrancamos el loop con cualquier número, luego ajustamos el intervalo
-        self.loop.change_interval(minutes=self.check_interval_min)
         self.loop.start()
 
     # ---------- UTILIDADES ----------
     async def fetch_calendar(self):
-        async with aiohttp.ClientSession() as session:
-            async with session.get(self.moodle_ics_url) as r:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(self.moodle_ics_url) as r:
                 return Calendar.from_ical(await r.text())
 
     def classify(self, hours):
@@ -40,11 +37,13 @@ class MoodleCalendar(commands.Cog):
         return None
 
     # ---------- LOOP PRINCIPAL ----------
-    @tasks.loop(minutes=60)  # número inicial, se ajusta en __init__
+    @tasks.loop(minutes=15)
     async def loop(self):
         cal = await self.fetch_calendar()
         now = datetime.now(self.tz)
         channel = self.bot.get_channel(self.channel_id)
+        if not channel:
+            return  # canal no encontrado aún
 
         dashboard = discord.Embed(
             title="📊 Dashboard de Tareas Moodle",
@@ -58,29 +57,27 @@ class MoodleCalendar(commands.Cog):
         for e in cal.walk("VEVENT"):
             title = str(e.get("summary"))
             due = e.get("dtend").dt
-
             if not isinstance(due, datetime):
                 continue
-
             due = due.astimezone(self.tz)
             hours = (due - now).total_seconds() / 3600
             active_tasks[title] = due
 
-            # ---- VENCIDAS ----
             if hours <= 0:
                 if title not in self.known_tasks:
                     cambios["vencidas"].append(title)
                 continue
 
             estado = self.classify(hours)
-            if estado:
-                dashboard.add_field(
-                    name=f"{estado} — {title}",
-                    value=f"⏰ {due.strftime('%d/%m %H:%M')} | ⌛ {int(hours)}h",
-                    inline=False
-                )
+            if not estado:
+                continue
 
-            # ---- NUEVAS ----
+            dashboard.add_field(
+                name=f"{estado} — {title}",
+                value=f"⏰ {due.strftime('%d/%m %H:%M')} | ⌛ {int(hours)}h",
+                inline=False
+            )
+
             if title not in self.known_tasks:
                 cambios["nuevas"].append((title, int(hours)))
                 if hours <= 24:
@@ -92,10 +89,13 @@ class MoodleCalendar(commands.Cog):
             msg = await channel.send(embed=dashboard)
             self.dashboard_id = msg.id
         else:
-            msg = await channel.fetch_message(self.dashboard_id)
-            await msg.edit(embed=dashboard)
+            try:
+                msg = await channel.fetch_message(self.dashboard_id)
+                await msg.edit(embed=dashboard)
+            except:
+                self.dashboard_id = None  # si falló, reseteamos
 
-        # ---------- LOG UNIFICADO ----------
+        # ---------- LOG ----------
         if any(cambios.values()):
             if self.log_id:
                 try:
@@ -137,11 +137,12 @@ class MoodleCalendar(commands.Cog):
         # ---------- GUARDAR ESTADO ----------
         self.known_tasks = active_tasks
 
-    # ---------- LIMPIEZA AL INICIAR ----------
     @loop.before_loop
     async def before(self):
         await self.bot.wait_until_ready()
-        channel = await self.bot.fetch_channel(self.channel_id)
+        channel = self.bot.get_channel(self.channel_id)
+        if not channel:
+            return
 
         # Borrar mensajes anteriores del bot
         async for msg in channel.history(limit=50):
