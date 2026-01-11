@@ -20,10 +20,10 @@ async def on_ready():
 if __name__ == "__main__":
     # 🔍 Health check (MISMO BOT, MISMO PROCESO)
     threading.Thread(
-        target=start_health_server,
         daemon=True
     ).start()
 
     bot.run(config.DISCORD_TOKEN)
+
 
 
