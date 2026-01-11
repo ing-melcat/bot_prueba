@@ -141,7 +141,7 @@ class MoodleCalendar(commands.Cog):
     @loop.before_loop
     async def before(self):
         await self.bot.wait_until_ready()
-        channel = self.bot.get_channel(self.channel_id)
+        channel = await self.bot.fetch_channel(self.channel_id)
 
         # Borrar mensajes anteriores del bot
         async for msg in channel.history(limit=50):
@@ -158,4 +158,5 @@ class MoodleCalendar(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(MoodleCalendar(bot))
+
 
