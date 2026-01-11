@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-import config
 import threading
 
 from health import start_health_server
@@ -28,3 +27,4 @@ if __name__ == "__main__":
     ).start()
 
     bot.run(config.DISCORD_TOKEN)
+
