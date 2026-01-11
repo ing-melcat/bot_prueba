@@ -3,28 +3,25 @@ import asyncio
 import discord
 from discord.ext import commands
 
-# Intents necesarios
-intents = discord.Intents.default()
-intents.message_content = True
+# ---------- VARIABLES DESDE ENVIRON ----------
+TOKEN = os.environ.get("DISCORD_TOKEN")
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 0))
+MOODLE_ICS_URL = os.environ.get("MOODLE_ICS_URL")
+CHECK_INTERVAL_MIN = int(os.environ.get("CHECK_INTERVAL_MIN", 15))
+TIMEZONE = os.environ.get("TIMEZONE", "America/Mexico_City")
 
-# Bot
+# ---------- BOT SIN INTENTS PRIVILEGIADOS ----------
+intents = discord.Intents.default()  # nada de all(), sin miembros ni mensajes
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Evento on_ready
-@bot.event
-async def on_ready():
-    print(f"✅ Bot conectado como {bot.user}")
-
-# Función para cargar cogs
+# ---------- CARGAR COGS ----------
 async def load_cogs():
     await bot.load_extension("cogs.moodle_calendar")
 
-# Main
-if __name__ == "__main__":
-    # Carga cogs antes de correr el bot
-    asyncio.run(load_cogs())
-    
-    # Ejecuta bot
-    bot.run(os.environ["DISCORD_TOKEN"])
+asyncio.run(load_cogs())
+
+# ---------- CORRER BOT ----------
+bot.run(TOKEN)
+
 
 
