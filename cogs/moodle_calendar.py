@@ -4,7 +4,6 @@ import aiohttp
 from icalendar import Calendar
 from datetime import datetime, timedelta
 import pytz
-import config
 import re
 
 class MoodleCalendar(commands.Cog):
@@ -165,3 +164,4 @@ class MoodleCalendar(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(MoodleCalendar(bot))
+
