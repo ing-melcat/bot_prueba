@@ -1,27 +1,40 @@
-import os
-import asyncio
 import discord
 from discord.ext import commands
+import os
+import asyncio
 
-# ---------- VARIABLES DESDE ENVIRON ----------
-TOKEN = os.environ.get("DISCORD_TOKEN")
-CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 0))
-MOODLE_ICS_URL = os.environ.get("MOODLE_ICS_URL")
-CHECK_INTERVAL_MIN = int(os.environ.get("CHECK_INTERVAL_MIN", 15))
-TIMEZONE = os.environ.get("TIMEZONE", "America/Mexico_City")
+# ---------- INTENTS MÍNIMOS ----------
+intents = discord.Intents.default()  # Solo lo básico, no pide presencia ni members ni message content
 
-# ---------- BOT SIN INTENTS PRIVILEGIADOS ----------
-intents = discord.Intents.default()  # nada de all(), sin miembros ni mensajes
+# ---------- BOT ----------
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------- CARGAR COGS ----------
 async def load_cogs():
-    await bot.load_extension("cogs.moodle_calendar")
+    for filename in os.listdir("./cogs"):
+        if filename.endswith(".py"):
+            try:
+                await bot.load_extension(f"cogs.{filename[:-3]}")
+                print(f"✅ Cog cargado: {filename}")
+            except Exception as e:
+                print(f"❌ Error cargando {filename}: {e}")
 
-asyncio.run(load_cogs())
+# ---------- EVENTOS BÁSICOS ----------
+@bot.event
+async def on_ready():
+    print(f"🤖 Bot listo! Conectado como {bot.user} (ID: {bot.user.id})")
 
-# ---------- CORRER BOT ----------
-bot.run(TOKEN)
+# ---------- RUN ----------
+async def main():
+    await load_cogs()
+    token = os.environ.get("DISCORD_TOKEN")
+    if not token:
+        print("❌ ERROR: No se encontró DISCORD_TOKEN en variables de entorno")
+        return
+    await bot.start(token)
+
+asyncio.run(main())
+
 
 
 
